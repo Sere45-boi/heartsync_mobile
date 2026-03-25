@@ -16,6 +16,7 @@ class _PairScreenState extends State<PairScreen> {
   String? _inviteCode;
   final _codeController = TextEditingController();
   bool _isLoading = false;
+  bool _isWaitingForPartner = false;
 
   @override
   void initState() {
@@ -49,10 +50,34 @@ class _PairScreenState extends State<PairScreen> {
         'couple_id': coupleRes['id']
       }).eq('id', user.id);
 
-      _showSuccessAndGoHome();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isWaitingForPartner = true;
+        });
+        _pollForPartnerInfo(coupleRes['id']);
+      }
     } catch (e) {
       _showError(e.toString());
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pollForPartnerInfo(String coupleId) async {
+    while (_isWaitingForPartner && mounted) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) break;
+      try {
+        final res = await Supabase.instance.client
+            .from('couples')
+            .select()
+            .eq('id', coupleId)
+            .maybeSingle();
+        if (res != null && res['partner_b'] != null) {
+          _showSuccessAndGoHome();
+          break;
+        }
+      } catch (_) {}
     }
   }
 
@@ -158,12 +183,21 @@ class _PairScreenState extends State<PairScreen> {
                 ),
               ),
               const SizedBox(height: 48),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _createSpace,
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: AppColors.surface)
-                  : const Text("Create Space"),
-              ),
+              if (_isWaitingForPartner)
+                Column(
+                  children: [
+                    const CircularProgressIndicator(color: AppColors.primary),
+                    const SizedBox(height: 16),
+                    const Text("Waiting for partner to join...", style: TextStyle(color: AppColors.primary)),
+                  ],
+                )
+              else
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _createSpace,
+                  child: _isLoading 
+                    ? const CircularProgressIndicator(color: AppColors.surface)
+                    : const Text("Create Space"),
+                ),
             ] else ...[
               TextField(
                 controller: _codeController,

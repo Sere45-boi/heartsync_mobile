@@ -26,7 +26,25 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
-      context.go('/home');
+      try {
+        final userId = session.user.id;
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select()
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (!mounted) return;
+
+        if (profile != null && profile['couple_id'] != null) {
+          context.go('/home');
+        } else {
+          context.go('/pair');
+        }
+      } catch (e) {
+        if (!mounted) return;
+        context.go('/pair'); // Fallback to pair screen if profile fetch fails
+      }
     } else {
       context.go('/onboarding');
     }
